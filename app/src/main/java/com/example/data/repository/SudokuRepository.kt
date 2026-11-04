@@ -11,9 +11,13 @@ import com.example.data.model.FirestoreLeaderboardEntry
 import com.example.data.model.FirestoreSticker
 import com.example.data.model.GameSessionEntity
 import com.example.data.model.GameStatsEntity
+import com.example.data.model.SolvedPuzzleEntity
 import com.example.data.model.StickerEntity
 import com.example.data.remote.OperationType
 import com.example.data.remote.handleFirestoreError
+import com.example.logic.Difficulty
+import com.example.logic.ScoreResult
+import com.example.logic.SudokuScoring
 import com.example.ui.viewmodel.LeaderboardEntry
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
@@ -24,6 +28,9 @@ import com.google.firebase.firestore.Query
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
@@ -87,6 +94,23 @@ class SudokuRepository(
         syncLeaderboardEntry(overrideUsername = trimmed)
     }
 
+    fun getUserTotalScore(): Int {
+        val prefs = context?.getSharedPreferences("obsidian_sudoku_settings", Context.MODE_PRIVATE)
+        return prefs?.getInt("key_user_total_score", 0) ?: 0
+    }
+
+    private val _userTotalScoreFlow = MutableStateFlow(getUserTotalScore())
+    val userTotalScoreFlow: StateFlow<Int> = _userTotalScoreFlow.asStateFlow()
+
+    fun addScore(points: Int): Int {
+        val prefs = context?.getSharedPreferences("obsidian_sudoku_settings", Context.MODE_PRIVATE)
+        val current = prefs?.getInt("key_user_total_score", 0) ?: 0
+        val updated = (current + points).coerceAtLeast(0)
+        prefs?.edit()?.putInt("key_user_total_score", updated)?.apply()
+        _userTotalScoreFlow.value = updated
+        return updated
+    }
+
     fun getOverallStreak(): Int {
         val prefs = context?.getSharedPreferences("obsidian_sudoku_settings", Context.MODE_PRIVATE)
         val today = getTodayDateString()
@@ -140,7 +164,8 @@ class SudokuRepository(
         fun fallbackList(): List<LeaderboardEntry> {
             val myName = getPublicUsername()
             val myStreak = getOverallStreak()
-            val userScore = (myStreak * 150 + 450).coerceAtLeast(300)
+            val currentTotal = getUserTotalScore()
+            val userScore = if (currentTotal > 0) currentTotal else (myStreak * 150 + 450).coerceAtLeast(300)
             return listOf(
                 LeaderboardEntry(1, "Aetherius", "Grandmaster", 3850, "02:14"),
                 LeaderboardEntry(2, "Vespera", "Void Sovereign", 3120, "02:45"),
@@ -195,12 +220,14 @@ class SudokuRepository(
                 if (!hasCurrentUserInList && currentUid != null) {
                     val myName = getPublicUsername()
                     val myStreak = getOverallStreak()
+                    val totalScore = getUserTotalScore()
+                    val userScore = if (totalScore > 0) totalScore else (myStreak * 150 + 100)
                     remoteList.add(
                         LeaderboardEntry(
                             rank = remoteList.size + 1,
                             name = myName,
                             title = "Obsidian Solver",
-                            score = myStreak * 150 + 100,
+                            score = userScore,
                             bestTime = "--:--",
                             isCurrentUser = true
                         )
@@ -234,7 +261,9 @@ class SudokuRepository(
             String.format(Locale.US, "%02d:%02d", mins, secs)
         } else "--:--"
 
-        val score = (totalWon * 150 + totalPerfect * 200 + streak * 50).coerceAtLeast(100)
+        val currentStoredScore = getUserTotalScore()
+        val calculatedStatsScore = (totalWon * 200 + totalPerfect * 250 + streak * 75)
+        val score = maxOf(currentStoredScore, calculatedStatsScore).coerceAtLeast(100)
         val title = when {
             score >= 5000 -> "Grandmaster"
             score >= 3000 -> "Void Sovereign"
@@ -402,6 +431,12 @@ class SudokuRepository(
     val allStats: Flow<List<GameStatsEntity>>
         get() = observeAllStats()
 
+    val allSolvedPuzzles: Flow<List<SolvedPuzzleEntity>>
+        get() = dao?.getAllSolvedPuzzles() ?: kotlinx.coroutines.flow.flowOf(emptyList())
+
+    val solvedPuzzlesCount: Flow<Int>
+        get() = dao?.getSolvedPuzzlesCount() ?: kotlinx.coroutines.flow.flowOf(0)
+
     suspend fun getActiveSessionOnce(targetUserId: String? = null): GameSessionEntity? {
         if (isLocalOnlySession(targetUserId)) {
             return dao!!.getActiveSession().firstOrNull()
@@ -566,22 +601,50 @@ class SudokuRepository(
 
     /**
      * Records a finished Sudoku game.
-     * When won, increments the overall active streak for ANY puzzle difficulty (not just Daily)!
+     * Calculates transparent match score, persists solved puzzle entry, updates streak,
+     * and syncs the realtime leaderboard.
      */
     suspend fun recordGameFinished(
         difficulty: String,
         timeSeconds: Long,
         mistakes: Int,
         isWon: Boolean
-    ) {
+    ): ScoreResult {
+        val diffEnum = Difficulty.fromName(difficulty)
         val newStreak = if (isWon) {
             updateOverallStreakOnWin()
         } else {
             0
         }
 
+        val scoreResult = SudokuScoring.calculateScore(
+            difficulty = diffEnum,
+            timeSeconds = timeSeconds,
+            mistakes = mistakes,
+            streak = newStreak,
+            isWon = isWon
+        )
+
+        // Increment cumulative score immediately!
+        addScore(scoreResult.totalEarned)
+
+        // Save individual solved puzzle history entry
+        if (isWon) {
+            val solvedPuzzle = SolvedPuzzleEntity(
+                difficulty = difficulty,
+                timeSpentSeconds = timeSeconds,
+                mistakes = mistakes,
+                scoreEarned = scoreResult.totalEarned,
+                isDaily = (diffEnum == Difficulty.DAILY),
+                solvedAt = System.currentTimeMillis()
+            )
+            try {
+                dao?.insertSolvedPuzzle(solvedPuzzle)
+            } catch (_: Exception) {}
+        }
+
         if (isLocalOnlySession()) {
-            val localDao = dao ?: return
+            val localDao = dao ?: return scoreResult
             val existing = localDao.getStats(difficulty) ?: GameStatsEntity(difficulty = difficulty)
             val newPlayed = existing.gamesPlayed + 1
             val newWon = if (isWon) existing.gamesWon + 1 else existing.gamesWon
@@ -610,7 +673,7 @@ class SudokuRepository(
                 if (newStreak >= 7) localDao.unlockSticker("daily_streak_7")
                 if (newWon >= 10) localDao.unlockSticker("ten_games")
             }
-            return
+            return scoreResult
         }
 
         val uid = requireUserId()
@@ -686,16 +749,17 @@ class SudokuRepository(
                 if (newStreak >= 3) unlockSticker("daily_streak_3")
                 if (newStreak >= 7) unlockSticker("daily_streak_7")
                 if (newWon >= 10) unlockSticker("ten_games")
-
-                // Update leaderboard in realtime!
-                syncLeaderboardEntry()
             }
+
+            // Sync score and stats with realtime leaderboard on every match!
+            syncLeaderboardEntry()
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             handleFirestoreError(e, OperationType.WRITE, docRef.path)
             throw e
         }
+        return scoreResult
     }
 
     suspend fun completeDailyChallenge(

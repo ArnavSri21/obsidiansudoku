@@ -49,3 +49,15 @@ data class GameStatsEntity(
     val winStreak: Int = 0,
     val perfectGames: Int = 0
 )
+
+@Entity(tableName = "solved_puzzles")
+data class SolvedPuzzleEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val difficulty: String,
+    val timeSpentSeconds: Long,
+    val mistakes: Int,
+    val scoreEarned: Int,
+    val isDaily: Boolean,
+    val solvedAt: Long = System.currentTimeMillis()
+)
+

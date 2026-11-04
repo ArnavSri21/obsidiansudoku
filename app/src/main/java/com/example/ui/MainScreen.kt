@@ -17,19 +17,26 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.GridOn
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Leaderboard
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.CalendarToday
 import androidx.compose.material.icons.outlined.EmojiEvents
 import androidx.compose.material.icons.outlined.GridOn
+import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Leaderboard
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
@@ -38,6 +45,7 @@ import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.NavigationRailItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
@@ -68,12 +76,16 @@ import com.example.logic.Difficulty
 import com.example.ui.components.SettingsColumnSheet
 import com.example.ui.screens.AuthScreen
 import com.example.ui.screens.DailyScreen
+import com.example.ui.screens.DashboardScreen
+import com.example.ui.screens.HomeScreen
 import com.example.ui.screens.LeaderboardScreen
 import com.example.ui.screens.PlayScreen
 import com.example.ui.screens.StickersScreen
 import com.example.ui.screens.signOut
 import com.example.ui.theme.LocalThemePalette
+import com.example.ui.theme.WarmAmber
 import com.example.ui.viewmodel.DailyViewModel
+import com.example.ui.viewmodel.DashboardViewModel
 import com.example.ui.viewmodel.SocialViewModel
 import com.example.ui.viewmodel.StickersViewModel
 import com.example.ui.viewmodel.SudokuViewModel
@@ -88,11 +100,13 @@ enum class ScreenTab(
     val unselectedIcon: ImageVector,
     val testTag: String
 ) {
+    HOME("Home", Icons.Filled.Home, Icons.Outlined.Home, "nav_tab_home"),
     PLAY("Play", Icons.Filled.GridOn, Icons.Outlined.GridOn, "nav_tab_play"),
-    DAILY("Daily", Icons.Filled.CalendarToday, Icons.Outlined.CalendarToday, "nav_tab_daily"),
-    STICKERS("Stickers", Icons.Filled.EmojiEvents, Icons.Outlined.EmojiEvents, "nav_tab_stickers"),
-    LEADERBOARD("Ranks", Icons.Filled.Leaderboard, Icons.Outlined.Leaderboard, "nav_tab_leaderboard")
+    DASHBOARD("Dashboard", Icons.Filled.BarChart, Icons.Outlined.BarChart, "nav_tab_dashboard"),
+    LEADERBOARD("Rank", Icons.Filled.Leaderboard, Icons.Outlined.Leaderboard, "nav_tab_leaderboard"),
+    DAILY("Daily", Icons.Filled.CalendarToday, Icons.Outlined.CalendarToday, "nav_tab_daily")
 }
+
 
 @Composable
 fun AppNavigation() {
@@ -197,11 +211,25 @@ fun AuthenticatedAppContent(
         }
     )
 
+    val dashboardViewModel: DashboardViewModel = viewModel(
+        key = "dashboard_$currentUserId",
+        factory = viewModelFactory {
+            initializer {
+                val app = checkNotNull(this[APPLICATION_KEY])
+                val databaseId = app.getString(R.string.firestore_database_id)
+                val db = FirebaseFirestore.getInstance(databaseId)
+                val dao = SudokuDatabase.getDatabase(app).sudokuDao()
+                DashboardViewModel(SudokuRepository(db, dao, app))
+            }
+        }
+    )
+
     MainScreen(
         sudokuViewModel = sudokuViewModel,
         dailyViewModel = dailyViewModel,
         stickersViewModel = stickersViewModel,
         socialViewModel = socialViewModel,
+        dashboardViewModel = dashboardViewModel,
         onSignOut = {
             signOut(
                 context = context,
@@ -213,21 +241,25 @@ fun AuthenticatedAppContent(
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(
     sudokuViewModel: SudokuViewModel,
     dailyViewModel: DailyViewModel,
     stickersViewModel: StickersViewModel,
     socialViewModel: SocialViewModel,
+    dashboardViewModel: DashboardViewModel,
     onSignOut: () -> Unit = {}
 ) {
-    var currentTab by remember { mutableStateOf(ScreenTab.PLAY) }
+    var currentTab by remember { mutableStateOf(ScreenTab.HOME) }
     var showSettingsSheet by remember { mutableStateOf(false) }
+    var showStickersSheet by remember { mutableStateOf(false) }
     val palette = LocalThemePalette.current
     val socialUiState by socialViewModel.uiState.collectAsState()
+    val sudokuUiState by sudokuViewModel.uiState.collectAsState()
 
-    BackHandler(enabled = currentTab != ScreenTab.PLAY) {
-        currentTab = ScreenTab.PLAY
+    BackHandler(enabled = currentTab != ScreenTab.HOME) {
+        currentTab = ScreenTab.HOME
     }
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
@@ -283,6 +315,7 @@ fun MainScreen(
                     TopHeaderBar(
                         tab = currentTab,
                         streak = socialUiState.currentStreak,
+                        totalScore = sudokuUiState.totalScore,
                         onOpenSettings = { showSettingsSheet = true },
                         palette = palette
                     )
@@ -293,7 +326,17 @@ fun MainScreen(
                             dailyViewModel = dailyViewModel,
                             stickersViewModel = stickersViewModel,
                             socialViewModel = socialViewModel,
-                            onNavigateToPlay = { currentTab = ScreenTab.PLAY }
+                            dashboardViewModel = dashboardViewModel,
+                            onNavigateToHome = { currentTab = ScreenTab.HOME },
+                            onNavigateToPlay = { currentTab = ScreenTab.PLAY },
+                            onNavigateToRank = { currentTab = ScreenTab.LEADERBOARD },
+                            onNavigateToDashboard = { currentTab = ScreenTab.DASHBOARD },
+                            onNavigateToDaily = { currentTab = ScreenTab.DAILY },
+                            onNavigateToStickers = { showStickersSheet = true },
+                            onStartMatch = { diff ->
+                                sudokuViewModel.startNewGame(diff, isDaily = false)
+                                currentTab = ScreenTab.PLAY
+                            }
                         )
                     }
                 }
@@ -305,6 +348,7 @@ fun MainScreen(
                     TopHeaderBar(
                         tab = currentTab,
                         streak = socialUiState.currentStreak,
+                        totalScore = sudokuUiState.totalScore,
                         onOpenSettings = { showSettingsSheet = true },
                         palette = palette,
                         modifier = Modifier.padding(top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding())
@@ -352,7 +396,17 @@ fun MainScreen(
                         dailyViewModel = dailyViewModel,
                         stickersViewModel = stickersViewModel,
                         socialViewModel = socialViewModel,
-                        onNavigateToPlay = { currentTab = ScreenTab.PLAY }
+                        dashboardViewModel = dashboardViewModel,
+                        onNavigateToHome = { currentTab = ScreenTab.HOME },
+                        onNavigateToPlay = { currentTab = ScreenTab.PLAY },
+                        onNavigateToRank = { currentTab = ScreenTab.LEADERBOARD },
+                        onNavigateToDashboard = { currentTab = ScreenTab.DASHBOARD },
+                        onNavigateToDaily = { currentTab = ScreenTab.DAILY },
+                        onNavigateToStickers = { showStickersSheet = true },
+                        onStartMatch = { diff ->
+                            sudokuViewModel.startNewGame(diff, isDaily = false)
+                            currentTab = ScreenTab.PLAY
+                        }
                     )
                 }
             }
@@ -366,12 +420,27 @@ fun MainScreen(
             onSignOut = onSignOut
         )
     }
+
+    if (showStickersSheet) {
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ModalBottomSheet(
+            onDismissRequest = { showStickersSheet = false },
+            sheetState = sheetState,
+            containerColor = palette.surface,
+            contentColor = palette.cellGivenText
+        ) {
+            Box(modifier = Modifier.padding(16.dp)) {
+                StickersScreen(viewModel = stickersViewModel)
+            }
+        }
+    }
 }
 
 @Composable
 fun TopHeaderBar(
     tab: ScreenTab,
     streak: Int,
+    totalScore: Int,
     onOpenSettings: () -> Unit,
     palette: com.example.ui.theme.ThemePalette,
     modifier: Modifier = Modifier
@@ -385,7 +454,7 @@ fun TopHeaderBar(
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
                 text = "Obsidian Sudoku",
@@ -404,10 +473,28 @@ fun TopHeaderBar(
             ) {
                 Text(
                     text = "🔥 $streak",
-                    fontSize = 12.sp,
+                    fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     color = palette.secondary
                 )
+            }
+
+            // Live Rating Score badge
+            if (totalScore > 0) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(WarmAmber.copy(alpha = 0.18f))
+                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                        .testTag("header_score_badge")
+                ) {
+                    Text(
+                        text = "⭐ $totalScore",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = WarmAmber
+                    )
+                }
             }
         }
 
@@ -437,10 +524,34 @@ fun TabContent(
     dailyViewModel: DailyViewModel,
     stickersViewModel: StickersViewModel,
     socialViewModel: SocialViewModel,
-    onNavigateToPlay: () -> Unit
+    dashboardViewModel: DashboardViewModel,
+    onNavigateToHome: () -> Unit,
+    onNavigateToPlay: () -> Unit,
+    onNavigateToRank: () -> Unit,
+    onNavigateToDashboard: () -> Unit,
+    onNavigateToDaily: () -> Unit,
+    onNavigateToStickers: () -> Unit,
+    onStartMatch: (Difficulty) -> Unit
 ) {
     when (tab) {
-        ScreenTab.PLAY -> PlayScreen(viewModel = sudokuViewModel)
+        ScreenTab.HOME -> HomeScreen(
+            sudokuViewModel = sudokuViewModel,
+            socialViewModel = socialViewModel,
+            onStartMatch = onStartMatch,
+            onNavigateToRank = onNavigateToRank,
+            onNavigateToDashboard = onNavigateToDashboard,
+            onNavigateToDaily = onNavigateToDaily,
+            onNavigateToStickers = onNavigateToStickers
+        )
+        ScreenTab.PLAY -> PlayScreen(
+            viewModel = sudokuViewModel,
+            onGoHome = onNavigateToHome
+        )
+        ScreenTab.DASHBOARD -> DashboardScreen(
+            viewModel = dashboardViewModel,
+            onNavigateToPlay = onNavigateToPlay
+        )
+        ScreenTab.LEADERBOARD -> LeaderboardScreen(viewModel = socialViewModel)
         ScreenTab.DAILY -> DailyScreen(
             viewModel = dailyViewModel,
             onStartDailyGame = {
@@ -448,7 +559,6 @@ fun TabContent(
                 onNavigateToPlay()
             }
         )
-        ScreenTab.STICKERS -> StickersScreen(viewModel = stickersViewModel)
-        ScreenTab.LEADERBOARD -> LeaderboardScreen(viewModel = socialViewModel)
     }
 }
+

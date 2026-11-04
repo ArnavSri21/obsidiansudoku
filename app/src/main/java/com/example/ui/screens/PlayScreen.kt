@@ -23,8 +23,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.BasicAlertDialog
 import androidx.compose.material3.Button
@@ -49,6 +51,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.logic.Difficulty
+import com.example.logic.ScoreResult
 import com.example.ui.components.DifficultyDialog
 import com.example.ui.components.PersistentTimerComponent
 import com.example.ui.components.SudokuControls
@@ -71,6 +74,7 @@ import com.example.ui.viewmodel.SudokuViewModel
 @Composable
 fun PlayScreen(
     viewModel: SudokuViewModel,
+    onGoHome: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -285,9 +289,12 @@ fun PlayScreen(
             timeFormatted = formatTimer(uiState.timerSeconds),
             mistakes = uiState.mistakes,
             difficulty = uiState.difficulty.displayName,
+            matchScore = uiState.lastMatchScore,
+            totalScore = uiState.totalScore,
             onPlayAgain = {
                 viewModel.startNewGame(uiState.difficulty, isDaily = false)
-            }
+            },
+            onGoHome = onGoHome
         )
     }
 
@@ -295,9 +302,12 @@ fun PlayScreen(
     if (uiState.isGameOver) {
         GameOverDialog(
             mistakes = uiState.mistakes,
+            matchScore = uiState.lastMatchScore,
+            totalScore = uiState.totalScore,
             onTryAgain = {
                 viewModel.startNewGame(uiState.difficulty, isDaily = false)
-            }
+            },
+            onGoHome = onGoHome
         )
     }
 }
@@ -308,7 +318,10 @@ fun VictoryDialog(
     timeFormatted: String,
     mistakes: Int,
     difficulty: String,
-    onPlayAgain: () -> Unit
+    matchScore: ScoreResult?,
+    totalScore: Int,
+    onPlayAgain: () -> Unit,
+    onGoHome: () -> Unit
 ) {
     BasicAlertDialog(
         onDismissRequest = {},
@@ -316,18 +329,18 @@ fun VictoryDialog(
             .fillMaxWidth()
             .clip(RoundedCornerShape(20.dp))
             .background(ObsidianSurface)
-            .border(1.dp, EmeraldGreen, RoundedCornerShape(20.dp))
+            .border(1.5.dp, EmeraldGreen, RoundedCornerShape(20.dp))
             .padding(24.dp)
             .testTag("victory_dialog")
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Box(
                 modifier = Modifier
-                    .size(64.dp)
-                    .clip(RoundedCornerShape(32.dp))
+                    .size(60.dp)
+                    .clip(RoundedCornerShape(30.dp))
                     .background(EmeraldGreen.copy(alpha = 0.2f)),
                 contentAlignment = Alignment.Center
             ) {
@@ -335,7 +348,7 @@ fun VictoryDialog(
                     imageVector = Icons.Default.CheckCircle,
                     contentDescription = null,
                     tint = EmeraldGreen,
-                    modifier = Modifier.size(36.dp)
+                    modifier = Modifier.size(34.dp)
                 )
             }
 
@@ -346,36 +359,119 @@ fun VictoryDialog(
                 color = Color.White
             )
 
+            // Dynamic Score Award Banner
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(ObsidianCard)
+                    .border(1.dp, ObsidianBorder, RoundedCornerShape(12.dp))
+                    .padding(12.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Star,
+                            contentDescription = null,
+                            tint = WarmAmber,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Text(
+                            text = "+${matchScore?.totalEarned ?: 600} Points",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = WarmAmber
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "Total Rating: $totalScore pts",
+                        fontSize = 12.sp,
+                        color = Color.LightGray
+                    )
+                    if (matchScore != null) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Base: ${matchScore.basePoints}", fontSize = 11.sp, color = Color.Gray)
+                            if (matchScore.speedBonus > 0) {
+                                Text("⚡+${matchScore.speedBonus}", fontSize = 11.sp, color = NeonCyan)
+                            }
+                            if (matchScore.accuracyBonus > 0) {
+                                Text("🎯+${matchScore.accuracyBonus}", fontSize = 11.sp, color = EmeraldGreen)
+                            }
+                            if (matchScore.streakBonus > 0) {
+                                Text("🔥+${matchScore.streakBonus}", fontSize = 11.sp, color = WarmAmber)
+                            }
+                        }
+                    }
+                }
+            }
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("Time", fontSize = 12.sp, color = Color.Gray)
-                    Text(timeFormatted, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = NeonCyan)
+                    Text(timeFormatted, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = NeonCyan)
                 }
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("Mistakes", fontSize = 12.sp, color = Color.Gray)
-                    Text("$mistakes", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = if (mistakes == 0) EmeraldGreen else WarmAmber)
+                    Text("$mistakes", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = if (mistakes == 0) EmeraldGreen else WarmAmber)
                 }
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("Difficulty", fontSize = 12.sp, color = Color.Gray)
-                    Text(difficulty, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = ObsidianViolet)
+                    Text(difficulty, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = ObsidianViolet)
                 }
             }
 
-            Button(
-                onClick = onPlayAgain,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = ObsidianPrimary,
-                    contentColor = Color.White
-                ),
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("victory_play_again_button")
+            // Two Required Options: Play Again & Back to Home Screen
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Text("Play Again", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Button(
+                    onClick = onPlayAgain,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = ObsidianPrimary,
+                        contentColor = Color.White
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp)
+                        .testTag("victory_play_again_button")
+                ) {
+                    Text("Play Again", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                }
+
+                OutlinedButton(
+                    onClick = onGoHome,
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = Color.White
+                    ),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, ObsidianBorder),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp)
+                        .testTag("victory_home_button")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Home,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Back to Home Screen", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                }
             }
         }
     }
@@ -385,7 +481,10 @@ fun VictoryDialog(
 @Composable
 fun GameOverDialog(
     mistakes: Int,
-    onTryAgain: () -> Unit
+    matchScore: ScoreResult?,
+    totalScore: Int,
+    onTryAgain: () -> Unit,
+    onGoHome: () -> Unit
 ) {
     BasicAlertDialog(
         onDismissRequest = {},
@@ -393,18 +492,18 @@ fun GameOverDialog(
             .fillMaxWidth()
             .clip(RoundedCornerShape(20.dp))
             .background(ObsidianSurface)
-            .border(1.dp, CrimsonError, RoundedCornerShape(20.dp))
+            .border(1.5.dp, CrimsonError, RoundedCornerShape(20.dp))
             .padding(24.dp)
             .testTag("game_over_dialog")
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Box(
                 modifier = Modifier
-                    .size(64.dp)
-                    .clip(RoundedCornerShape(32.dp))
+                    .size(60.dp)
+                    .clip(RoundedCornerShape(30.dp))
                     .background(CrimsonError.copy(alpha = 0.2f)),
                 contentAlignment = Alignment.Center
             ) {
@@ -412,7 +511,7 @@ fun GameOverDialog(
                     imageVector = Icons.Default.Warning,
                     contentDescription = null,
                     tint = CrimsonError,
-                    modifier = Modifier.size(36.dp)
+                    modifier = Modifier.size(34.dp)
                 )
             }
 
@@ -424,25 +523,71 @@ fun GameOverDialog(
             )
 
             Text(
-                text = "You made $mistakes mistakes. Don't worry, every obsidian master hones their focus through practice.",
+                text = "You made $mistakes mistakes. Focus sharpens through practice.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = Color.Gray,
-                fontSize = 14.sp
+                fontSize = 13.sp
             )
 
-            Button(
-                onClick = onTryAgain,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = ObsidianPrimary,
-                    contentColor = Color.White
-                ),
-                shape = RoundedCornerShape(12.dp),
+            // Participation points
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .testTag("try_again_button")
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(ObsidianCard)
+                    .padding(10.dp),
+                contentAlignment = Alignment.Center
             ) {
-                Text("Try Again", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Text(
+                    text = "+${matchScore?.totalEarned ?: 100} Match Effort Points  •  Total: $totalScore pts",
+                    fontSize = 12.sp,
+                    color = Color.LightGray,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+
+            // Two Required Options: Try Again & Back to Home Screen
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Button(
+                    onClick = onTryAgain,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = ObsidianPrimary,
+                        contentColor = Color.White
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp)
+                        .testTag("try_again_button")
+                ) {
+                    Text("Try Again", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                }
+
+                OutlinedButton(
+                    onClick = onGoHome,
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = Color.White
+                    ),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, ObsidianBorder),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp)
+                        .testTag("game_over_home_button")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Home,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Back to Home Screen", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                }
             }
         }
     }
 }
+

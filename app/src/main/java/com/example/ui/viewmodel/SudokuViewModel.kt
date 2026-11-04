@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.model.GameSessionEntity
 import com.example.data.repository.SudokuRepository
 import com.example.logic.Difficulty
+import com.example.logic.ScoreResult
 import com.example.logic.SudokuEngine
 import com.example.ui.model.Cell
 import kotlinx.coroutines.Job
@@ -36,8 +37,11 @@ data class SudokuUiState(
     val isGameWon: Boolean = false,
     val isNotesMode: Boolean = false,
     val remainingCounts: Map<Int, Int> = (1..9).associateWith { 9 },
-    val feedbackMessage: String? = null
+    val feedbackMessage: String? = null,
+    val lastMatchScore: ScoreResult? = null,
+    val totalScore: Int = 0
 )
+
 
 fun createEmptyBoard(): List<List<Cell>> {
     return List(9) { r ->
@@ -99,9 +103,11 @@ class SudokuViewModel(
             difficulty = difficulty,
             maxMistakes = difficulty.maxMistakes,
             remainingCounts = calculateRemainingCounts(newBoard),
-            feedbackMessage = "${difficulty.displayName} Game Started"
+            feedbackMessage = "${difficulty.displayName} Game Started",
+            totalScore = repository.getUserTotalScore()
         )
     }
+
 
     private fun startTimerLoop() {
         timerJob?.cancel()
@@ -186,7 +192,9 @@ class SudokuViewModel(
                     isGameWon = false,
                     isNotesMode = false,
                     remainingCounts = calculateRemainingCounts(newBoard),
-                    feedbackMessage = if (isDaily) "Daily Challenge Initialized!" else "${difficulty.displayName} Game Started"
+                    feedbackMessage = if (isDaily) "Daily Challenge Initialized!" else "${difficulty.displayName} Game Started",
+                    lastMatchScore = null,
+                    totalScore = repository.getUserTotalScore()
                 )
             }
             persistCurrentSession()
@@ -246,8 +254,14 @@ class SudokuViewModel(
             if (isOver) {
                 viewModelScope.launch {
                     try {
-                        repository.recordGameFinished(state.difficulty.name, state.timerSeconds, newMistakes, isWon = false)
+                        val scoreRes = repository.recordGameFinished(state.difficulty.name, state.timerSeconds, newMistakes, isWon = false)
                         repository.clearActiveSession()
+                        _uiState.update {
+                            it.copy(
+                                lastMatchScore = scoreRes,
+                                totalScore = repository.getUserTotalScore()
+                            )
+                        }
                     } catch (_: Exception) {
                         // Logged in repository
                     }
@@ -286,7 +300,7 @@ class SudokuViewModel(
         val s = _uiState.value
         viewModelScope.launch {
             try {
-                repository.recordGameFinished(s.difficulty.name, s.timerSeconds, s.mistakes, isWon = true)
+                val scoreRes = repository.recordGameFinished(s.difficulty.name, s.timerSeconds, s.mistakes, isWon = true)
                 if (s.isDaily) {
                     repository.completeDailyChallenge(
                         dateString = repository.getTodayDateString(),
@@ -297,11 +311,18 @@ class SudokuViewModel(
                     )
                 }
                 repository.clearActiveSession()
+                _uiState.update {
+                    it.copy(
+                        lastMatchScore = scoreRes,
+                        totalScore = repository.getUserTotalScore()
+                    )
+                }
             } catch (_: Exception) {
                 // Logged in repository
             }
         }
     }
+
 
     fun onErase() {
         val state = _uiState.value

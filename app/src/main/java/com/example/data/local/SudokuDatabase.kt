@@ -7,6 +7,7 @@ import androidx.room.RoomDatabase
 import com.example.data.model.DailyChallengeEntity
 import com.example.data.model.GameSessionEntity
 import com.example.data.model.GameStatsEntity
+import com.example.data.model.SolvedPuzzleEntity
 import com.example.data.model.StickerEntity
 
 @Database(
@@ -14,9 +15,10 @@ import com.example.data.model.StickerEntity
         GameSessionEntity::class,
         DailyChallengeEntity::class,
         StickerEntity::class,
-        GameStatsEntity::class
+        GameStatsEntity::class,
+        SolvedPuzzleEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class SudokuDatabase : RoomDatabase() {

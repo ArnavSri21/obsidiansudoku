@@ -8,6 +8,7 @@ import androidx.room.Update
 import com.example.data.model.DailyChallengeEntity
 import com.example.data.model.GameSessionEntity
 import com.example.data.model.GameStatsEntity
+import com.example.data.model.SolvedPuzzleEntity
 import com.example.data.model.StickerEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -62,4 +63,18 @@ interface SudokuDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun saveStats(stats: GameStatsEntity)
+
+    // Solved Puzzles History
+    @Query("SELECT * FROM solved_puzzles ORDER BY solvedAt DESC")
+    fun getAllSolvedPuzzles(): Flow<List<SolvedPuzzleEntity>>
+
+    @Query("SELECT * FROM solved_puzzles WHERE difficulty = :difficulty ORDER BY solvedAt DESC")
+    fun getSolvedPuzzlesByDifficulty(difficulty: String): Flow<List<SolvedPuzzleEntity>>
+
+    @Query("SELECT COUNT(*) FROM solved_puzzles")
+    fun getSolvedPuzzlesCount(): Flow<Int>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSolvedPuzzle(puzzle: SolvedPuzzleEntity): Long
 }
+
