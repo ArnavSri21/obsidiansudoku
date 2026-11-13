@@ -1,8 +1,10 @@
 package com.example.ui.screens
 
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,12 +19,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bolt
-import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.History
@@ -46,6 +47,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
@@ -54,6 +56,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.GameStatsEntity
 import com.example.data.model.SolvedPuzzleEntity
+import com.example.ui.components.InteractiveSpotlightBox
+import com.example.ui.components.StaggeredEntrance
+import com.example.ui.components.bounceClick
 import com.example.ui.components.formatTimer
 import com.example.ui.theme.CrimsonError
 import com.example.ui.theme.EmeraldGreen
@@ -84,106 +89,125 @@ fun DashboardScreen(
     ) {
         // Top Header
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    text = "Player Dashboard",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = palette.cellGivenText
-                )
-                Text(
-                    text = "Performance overview and complete history of every puzzle solved",
-                    fontSize = 12.sp,
-                    color = palette.cellNoteText
-                )
+            StaggeredEntrance(index = 0) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = "Player Dashboard",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = palette.cellGivenText
+                    )
+                    Text(
+                        text = "Performance overview and complete history of every puzzle solved",
+                        fontSize = 12.sp,
+                        color = palette.cellNoteText
+                    )
+                }
             }
         }
 
         // Overview KPI Cards
         item {
-            PerformanceSummaryGrid(uiState = uiState, palette = palette)
+            StaggeredEntrance(index = 1) {
+                PerformanceSummaryGrid(uiState = uiState, palette = palette)
+            }
         }
 
         // Difficulty Breakdown Section
         item {
-            DifficultyBreakdownCard(statsList = uiState.statsList, palette = palette)
+            StaggeredEntrance(index = 2) {
+                DifficultyBreakdownCard(statsList = uiState.statsList, palette = palette)
+            }
         }
 
         // Every Puzzle Solved History Header & Filters
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+            StaggeredEntrance(index = 3) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.History,
-                            contentDescription = null,
-                            tint = palette.primary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Text(
-                            text = "Every Solved Puzzle",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = palette.cellGivenText
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.History,
+                                contentDescription = null,
+                                tint = palette.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Text(
+                                text = "Every Solved Puzzle",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = palette.cellGivenText
+                            )
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(palette.primary.copy(alpha = 0.15f))
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = "${uiState.allSolvedPuzzles.size} Solved",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = palette.primary
+                            )
+                        }
                     }
 
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(palette.primary.copy(alpha = 0.15f))
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    // Filter Chips with Spring Bounce
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Text(
-                            text = "${uiState.allSolvedPuzzles.size} Solved",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = palette.primary
-                        )
-                    }
-                }
-
-                // Filter Chips
-                FlowRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    listOf("ALL", "EASY", "MEDIUM", "HARD", "EXPERT", "DAILY", "FLAWLESS").forEach { filterKey ->
-                        val isSelected = (uiState.selectedFilter.equals(filterKey, ignoreCase = true))
-                        FilterChip(
-                            selected = isSelected,
-                            onClick = { viewModel.setFilter(filterKey) },
-                            label = {
-                                Text(
-                                    text = if (filterKey == "ALL") "All (${uiState.allSolvedPuzzles.size})"
-                                    else if (filterKey == "FLAWLESS") "Flawless ⭐"
-                                    else filterKey.lowercase().replaceFirstChar { it.uppercase() },
-                                    fontSize = 12.sp,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                                )
-                            },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = palette.primary.copy(alpha = 0.25f),
-                                selectedLabelColor = palette.primary,
-                                containerColor = palette.card,
-                                labelColor = palette.cellNoteText
-                            ),
-                            border = FilterChipDefaults.filterChipBorder(
-                                enabled = true,
+                        listOf("ALL", "EASY", "MEDIUM", "HARD", "EXPERT", "DAILY", "FLAWLESS").forEach { filterKey ->
+                            val isSelected = (uiState.selectedFilter.equals(filterKey, ignoreCase = true))
+                            val chipScale by animateFloatAsState(
+                                targetValue = if (isSelected) 1.05f else 1f,
+                                animationSpec = spring(
+                                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                                    stiffness = Spring.StiffnessMediumLow
+                                ),
+                                label = "dashboard_chip_scale"
+                            )
+                            FilterChip(
                                 selected = isSelected,
-                                selectedBorderColor = palette.primary,
-                                borderColor = palette.border
-                            ),
-                            modifier = Modifier.testTag("filter_chip_${filterKey.lowercase()}")
-                        )
+                                onClick = { viewModel.setFilter(filterKey) },
+                                label = {
+                                    Text(
+                                        text = if (filterKey == "ALL") "All (${uiState.allSolvedPuzzles.size})"
+                                        else if (filterKey == "FLAWLESS") "Flawless ⭐"
+                                        else filterKey.lowercase().replaceFirstChar { it.uppercase() },
+                                        fontSize = 12.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = palette.primary.copy(alpha = 0.25f),
+                                    selectedLabelColor = palette.primary,
+                                    containerColor = palette.card,
+                                    labelColor = palette.cellNoteText
+                                ),
+                                border = FilterChipDefaults.filterChipBorder(
+                                    enabled = true,
+                                    selected = isSelected,
+                                    selectedBorderColor = palette.primary,
+                                    borderColor = palette.border
+                                ),
+                                modifier = Modifier
+                                    .scale(chipScale)
+                                    .bounceClick(scaleDown = 0.92f)
+                                    .testTag("filter_chip_${filterKey.lowercase()}")
+                            )
+                        }
                     }
                 }
             }
@@ -192,14 +216,18 @@ fun DashboardScreen(
         // Solved Puzzle Items or Empty State
         if (uiState.filteredSolvedPuzzles.isEmpty()) {
             item {
-                EmptySolvedPuzzlesCard(
-                    palette = palette,
-                    onPlayMatch = onNavigateToPlay
-                )
+                StaggeredEntrance(index = 4) {
+                    EmptySolvedPuzzlesCard(
+                        palette = palette,
+                        onPlayMatch = onNavigateToPlay
+                    )
+                }
             }
         } else {
-            items(uiState.filteredSolvedPuzzles, key = { it.id }) { puzzle ->
-                SolvedPuzzleItemCard(puzzle = puzzle, palette = palette)
+            itemsIndexed(uiState.filteredSolvedPuzzles, key = { _, item -> item.id }) { index, puzzle ->
+                StaggeredEntrance(index = (index.coerceAtMost(8)) + 4, baseDelayMs = 35) {
+                    SolvedPuzzleItemCard(puzzle = puzzle, palette = palette)
+                }
             }
         }
 
@@ -214,90 +242,95 @@ fun PerformanceSummaryGrid(
     uiState: com.example.ui.viewmodel.DashboardUiState,
     palette: com.example.ui.theme.ThemePalette
 ) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .testTag("kpi_summary_grid"),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = palette.surface),
-        border = androidx.compose.foundation.BorderStroke(1.dp, palette.borderStrong)
+    InteractiveSpotlightBox(
+        spotlightColor = palette.primary.copy(alpha = 0.14f),
+        maxTiltDegrees = 3.5f
     ) {
-        Column(
+        Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+                .testTag("kpi_summary_grid"),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = palette.surface),
+            border = androidx.compose.foundation.BorderStroke(1.dp, palette.borderStrong)
         ) {
-            // Row 1: Solved & Score
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                KpiItemBox(
-                    title = "Puzzles Solved",
-                    value = "${uiState.totalSolved}",
-                    icon = Icons.Default.CheckCircle,
-                    accentColor = EmeraldGreen,
-                    palette = palette,
-                    modifier = Modifier.weight(1f)
-                )
+                // Row 1: Solved & Score
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    KpiItemBox(
+                        title = "Puzzles Solved",
+                        value = "${uiState.totalSolved}",
+                        icon = Icons.Default.CheckCircle,
+                        accentColor = EmeraldGreen,
+                        palette = palette,
+                        modifier = Modifier.weight(1f)
+                    )
 
-                KpiItemBox(
-                    title = "Total Rating",
-                    value = "${uiState.totalScore} pts",
-                    icon = Icons.Default.Star,
-                    accentColor = WarmAmber,
-                    palette = palette,
-                    modifier = Modifier.weight(1f)
-                )
-            }
+                    KpiItemBox(
+                        title = "Total Rating",
+                        value = "${uiState.totalScore} pts",
+                        icon = Icons.Default.Star,
+                        accentColor = WarmAmber,
+                        palette = palette,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
 
-            // Row 2: Win Rate & Best Time
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                KpiItemBox(
-                    title = "Win Rate",
-                    value = String.format(Locale.US, "%.1f%%", uiState.winRatePercent),
-                    icon = Icons.Default.EmojiEvents,
-                    accentColor = palette.primary,
-                    palette = palette,
-                    modifier = Modifier.weight(1f)
-                )
+                // Row 2: Win Rate & Best Time
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    KpiItemBox(
+                        title = "Win Rate",
+                        value = String.format(Locale.US, "%.1f%%", uiState.winRatePercent),
+                        icon = Icons.Default.EmojiEvents,
+                        accentColor = palette.primary,
+                        palette = palette,
+                        modifier = Modifier.weight(1f)
+                    )
 
-                KpiItemBox(
-                    title = "Fastest Solve",
-                    value = uiState.bestTimeFormatted,
-                    icon = Icons.Default.Bolt,
-                    accentColor = NeonCyan,
-                    palette = palette,
-                    modifier = Modifier.weight(1f)
-                )
-            }
+                    KpiItemBox(
+                        title = "Fastest Solve",
+                        value = uiState.bestTimeFormatted,
+                        icon = Icons.Default.Bolt,
+                        accentColor = NeonCyan,
+                        palette = palette,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
 
-            // Row 3: Streak & Flawless
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                KpiItemBox(
-                    title = "Current Streak",
-                    value = "🔥 ${uiState.currentStreak} Days",
-                    icon = Icons.Default.LocalFireDepartment,
-                    accentColor = palette.secondary,
-                    palette = palette,
-                    modifier = Modifier.weight(1f)
-                )
+                // Row 3: Streak & Flawless
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    KpiItemBox(
+                        title = "Current Streak",
+                        value = "🔥 ${uiState.currentStreak} Days",
+                        icon = Icons.Default.LocalFireDepartment,
+                        accentColor = palette.secondary,
+                        palette = palette,
+                        modifier = Modifier.weight(1f)
+                    )
 
-                KpiItemBox(
-                    title = "Flawless Solves",
-                    value = "${uiState.flawlessCount}",
-                    icon = Icons.Default.CheckCircle,
-                    accentColor = EmeraldGreen,
-                    palette = palette,
-                    modifier = Modifier.weight(1f)
-                )
+                    KpiItemBox(
+                        title = "Flawless Solves",
+                        value = "${uiState.flawlessCount}",
+                        icon = Icons.Default.CheckCircle,
+                        accentColor = EmeraldGreen,
+                        palette = palette,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
             }
         }
     }
@@ -314,6 +347,7 @@ fun KpiItemBox(
 ) {
     Box(
         modifier = modifier
+            .bounceClick(scaleDown = 0.96f)
             .clip(RoundedCornerShape(14.dp))
             .background(palette.card)
             .border(1.dp, palette.border, RoundedCornerShape(14.dp))
@@ -380,56 +414,86 @@ fun DifficultyBreakdownCard(
                     val won = stat?.gamesWon ?: 0
                     val bestSecs = stat?.bestTimeSeconds ?: 0L
                     val bestFormatted = if (bestSecs > 0) formatTimer(bestSecs) else "--:--"
+                    val winFraction = if (played > 0) (won.toFloat() / played.toFloat()).coerceIn(0f, 1f) else 0f
+                    val animatedWinBar by animateFloatAsState(
+                        targetValue = winFraction,
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                            stiffness = Spring.StiffnessLow
+                        ),
+                        label = "diff_win_bar"
+                    )
+                    val diffAccent = when (diff) {
+                        "EASY" -> EmeraldGreen
+                        "MEDIUM" -> WarmAmber
+                        "HARD" -> palette.primary
+                        "EXPERT" -> CrimsonError
+                        else -> NeonCyan
+                    }
 
-                    Row(
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(10.dp))
                             .background(palette.card)
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                            .padding(horizontal = 12.dp, vertical = 9.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .clip(CircleShape)
+                                        .background(diffAccent)
+                                )
+                                Text(
+                                    text = diff.lowercase().replaceFirstChar { it.uppercase() },
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp,
+                                    color = palette.cellGivenText
+                                )
+                            }
+
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "$won / $played won",
+                                    fontSize = 12.sp,
+                                    color = palette.cellNoteText
+                                )
+                                Text(
+                                    text = "Best: $bestFormatted",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = palette.secondary
+                                )
+                            }
+                        }
+
+                        // Animated win-rate bar
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(4.dp)
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(palette.surface)
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(8.dp)
-                                    .clip(CircleShape)
-                                    .background(
-                                        when (diff) {
-                                            "EASY" -> EmeraldGreen
-                                            "MEDIUM" -> WarmAmber
-                                            "HARD" -> palette.primary
-                                            "EXPERT" -> CrimsonError
-                                            else -> NeonCyan
-                                        }
-                                    )
-                            )
-                            Text(
-                                text = diff.lowercase().replaceFirstChar { it.uppercase() },
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 13.sp,
-                                color = palette.cellGivenText
-                            )
-                        }
-
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(16.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "$won / $played won",
-                                fontSize = 12.sp,
-                                color = palette.cellNoteText
-                            )
-                            Text(
-                                text = "Best: $bestFormatted",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = palette.secondary
+                                    .fillMaxWidth(animatedWinBar)
+                                    .height(4.dp)
+                                    .clip(RoundedCornerShape(2.dp))
+                                    .background(diffAccent)
                             )
                         }
                     }
@@ -457,131 +521,137 @@ fun SolvedPuzzleItemCard(
         sdf.format(Date(puzzle.solvedAt))
     }
 
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .testTag("solved_puzzle_item_${puzzle.id}"),
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = palette.surface),
-        border = androidx.compose.foundation.BorderStroke(1.dp, palette.border)
+    InteractiveSpotlightBox(
+        spotlightColor = diffColor.copy(alpha = 0.14f),
+        maxTiltDegrees = 2.5f
     ) {
-        Row(
+        Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(14.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+                .bounceClick(scaleDown = 0.97f)
+                .testTag("solved_puzzle_item_${puzzle.id}"),
+            shape = RoundedCornerShape(14.dp),
+            colors = CardDefaults.cardColors(containerColor = palette.surface),
+            border = androidx.compose.foundation.BorderStroke(1.dp, palette.border)
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(diffColor.copy(alpha = 0.2f))
-                            .padding(horizontal = 8.dp, vertical = 3.dp)
-                    ) {
-                        Text(
-                            text = puzzle.difficulty.uppercase(Locale.US),
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = diffColor
-                        )
-                    }
-
-                    if (puzzle.isDaily) {
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(palette.secondary.copy(alpha = 0.2f))
-                                .padding(horizontal = 6.dp, vertical = 3.dp)
-                        ) {
-                            Text(
-                                text = "Daily",
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = palette.secondary
-                            )
-                        }
-                    }
-
-                    if (puzzle.mistakes == 0) {
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(6.dp))
-                                .background(EmeraldGreen.copy(alpha = 0.2f))
-                                .padding(horizontal = 6.dp, vertical = 3.dp)
-                        ) {
-                            Text(
-                                text = "Flawless ⭐",
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = EmeraldGreen
-                            )
-                        }
-                    }
-                }
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(14.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Timer,
-                            contentDescription = null,
-                            tint = NeonCyan,
-                            modifier = Modifier.size(14.dp)
-                        )
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(diffColor.copy(alpha = 0.2f))
+                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                        ) {
+                            Text(
+                                text = puzzle.difficulty.uppercase(Locale.US),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = diffColor
+                            )
+                        }
+
+                        if (puzzle.isDaily) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(palette.secondary.copy(alpha = 0.2f))
+                                    .padding(horizontal = 6.dp, vertical = 3.dp)
+                            ) {
+                                Text(
+                                    text = "Daily",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = palette.secondary
+                                )
+                            }
+                        }
+
+                        if (puzzle.mistakes == 0) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(EmeraldGreen.copy(alpha = 0.2f))
+                                    .padding(horizontal = 6.dp, vertical = 3.dp)
+                            ) {
+                                Text(
+                                    text = "Flawless ⭐",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = EmeraldGreen
+                                )
+                            }
+                        }
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Timer,
+                                contentDescription = null,
+                                tint = NeonCyan,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Text(
+                                text = formatTimer(puzzle.timeSpentSeconds),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = palette.cellGivenText
+                            )
+                        }
+
                         Text(
-                            text = formatTimer(puzzle.timeSpentSeconds),
+                            text = "•",
+                            color = palette.cellNoteText,
+                            fontSize = 12.sp
+                        )
+
+                        Text(
+                            text = "${puzzle.mistakes} mistakes",
                             fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = palette.cellGivenText
+                            color = if (puzzle.mistakes == 0) EmeraldGreen else palette.cellNoteText
                         )
                     }
 
                     Text(
-                        text = "•",
-                        color = palette.cellNoteText,
-                        fontSize = 12.sp
-                    )
-
-                    Text(
-                        text = "${puzzle.mistakes} mistakes",
-                        fontSize = 12.sp,
-                        color = if (puzzle.mistakes == 0) EmeraldGreen else palette.cellNoteText
+                        text = dateFormatted,
+                        fontSize = 11.sp,
+                        color = palette.cellNoteText
                     )
                 }
 
-                Text(
-                    text = dateFormatted,
-                    fontSize = 11.sp,
-                    color = palette.cellNoteText
-                )
-            }
-
-            // Score Earned Badge
-            Column(
-                horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Text(
-                    text = "+${puzzle.scoreEarned} pts",
-                    fontWeight = FontWeight.ExtraBold,
-                    fontSize = 16.sp,
-                    color = WarmAmber
-                )
-                Text(
-                    text = "Score Earned",
-                    fontSize = 10.sp,
-                    color = palette.cellNoteText
-                )
+                // Score Earned Badge
+                Column(
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = "+${puzzle.scoreEarned} pts",
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 16.sp,
+                        color = WarmAmber
+                    )
+                    Text(
+                        text = "Score Earned",
+                        fontSize = 10.sp,
+                        color = palette.cellNoteText
+                    )
+                }
             }
         }
     }
@@ -640,7 +710,9 @@ fun EmptySolvedPuzzlesCard(
                 onClick = onPlayMatch,
                 colors = ButtonDefaults.buttonColors(containerColor = palette.primary),
                 shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.testTag("empty_dashboard_play_button")
+                modifier = Modifier
+                    .bounceClick(scaleDown = 0.94f)
+                    .testTag("empty_dashboard_play_button")
             ) {
                 Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null)
                 Spacer(modifier = Modifier.width(6.dp))

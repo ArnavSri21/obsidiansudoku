@@ -1,8 +1,10 @@
 package com.example.ui.components
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -20,20 +22,19 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.logic.Difficulty
-import com.example.ui.theme.ObsidianBorder
-import com.example.ui.theme.ObsidianBorderStrong
-import com.example.ui.theme.ObsidianCard
-import com.example.ui.theme.ObsidianPrimary
-import com.example.ui.theme.ObsidianSurface
+import com.example.ui.theme.LocalThemePalette
 import com.example.ui.theme.ObsidianWarning
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -43,13 +44,15 @@ fun DifficultyDialog(
     onSelectDifficulty: (Difficulty) -> Unit,
     onDismiss: () -> Unit
 ) {
+    val palette = LocalThemePalette.current
+
     BasicAlertDialog(
         onDismissRequest = onDismiss,
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
-            .background(ObsidianSurface)
-            .border(1.dp, ObsidianBorderStrong, RoundedCornerShape(20.dp))
+            .clip(RoundedCornerShape(24.dp))
+            .background(palette.surface)
+            .border(1.dp, palette.borderStrong, RoundedCornerShape(24.dp))
             .padding(20.dp)
             .testTag("difficulty_dialog")
     ) {
@@ -67,7 +70,7 @@ fun DifficultyDialog(
             Text(
                 text = "Choose your level of challenge",
                 style = MaterialTheme.typography.bodyMedium,
-                color = Color.Gray
+                color = palette.cellNoteText
             )
 
             Spacer(modifier = Modifier.height(4.dp))
@@ -79,23 +82,35 @@ fun DifficultyDialog(
                 Difficulty.EXPERT
             )
 
-            for (diff in difficulties) {
+            difficulties.forEachIndexed { index, diff ->
+                // Each option slides up and fades in a beat after the one above it.
+                val enter = remember { Animatable(0f) }
+                LaunchedEffect(Unit) {
+                    kotlinx.coroutines.delay(60L * index)
+                    enter.animateTo(1f, tween(320, easing = FastOutSlowInEasing))
+                }
+
                 val isSelected = (diff == currentDifficulty)
+                val shape = RoundedCornerShape(14.dp)
                 Row(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(if (isSelected) ObsidianPrimary.copy(alpha = 0.2f) else ObsidianCard)
-                        .border(
-                            1.dp,
-                            if (isSelected) ObsidianPrimary else ObsidianBorder,
-                            RoundedCornerShape(12.dp)
-                        )
-                        .clickable {
+                        .graphicsLayer {
+                            alpha = enter.value
+                            translationY = (1f - enter.value) * 24.dp.toPx()
+                        }
+                        .bounceClick(pressedScale = 0.97f) {
                             onSelectDifficulty(diff)
                             onDismiss()
                         }
-                        .padding(14.dp)
+                        .fillMaxWidth()
+                        .clip(shape)
+                        .background(if (isSelected) palette.primary.copy(alpha = 0.2f) else palette.card)
+                        .border(
+                            1.dp,
+                            if (isSelected) palette.primary else palette.border,
+                            shape
+                        )
+                        .padding(16.dp)
                         .testTag("difficulty_${diff.name.lowercase()}"),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
@@ -109,7 +124,7 @@ fun DifficultyDialog(
                         )
                         Text(
                             text = diff.description,
-                            color = Color.Gray,
+                            color = palette.cellNoteText,
                             fontSize = 12.sp
                         )
                     }

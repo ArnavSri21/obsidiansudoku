@@ -1,6 +1,18 @@
 package com.example.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,15 +31,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.CalendarToday
-import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.GridOn
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Leaderboard
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.CalendarToday
-import androidx.compose.material.icons.outlined.EmojiEvents
 import androidx.compose.material.icons.outlined.GridOn
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Leaderboard
@@ -58,6 +67,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -73,7 +83,9 @@ import com.example.R
 import com.example.data.local.SudokuDatabase
 import com.example.data.repository.SudokuRepository
 import com.example.logic.Difficulty
+import com.example.ui.components.AnimatedRollingNumber
 import com.example.ui.components.SettingsColumnSheet
+import com.example.ui.components.bounceClick
 import com.example.ui.screens.AuthScreen
 import com.example.ui.screens.DailyScreen
 import com.example.ui.screens.DashboardScreen
@@ -106,7 +118,6 @@ enum class ScreenTab(
     LEADERBOARD("Rank", Icons.Filled.Leaderboard, Icons.Outlined.Leaderboard, "nav_tab_leaderboard"),
     DAILY("Daily", Icons.Filled.CalendarToday, Icons.Outlined.CalendarToday, "nav_tab_daily")
 }
-
 
 @Composable
 fun AppNavigation() {
@@ -274,13 +285,22 @@ fun MainScreen(
                 ) {
                     ScreenTab.entries.forEach { tab ->
                         val isSelected = (currentTab == tab)
+                        val iconScale by animateFloatAsState(
+                            targetValue = if (isSelected) 1.16f else 1f,
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                stiffness = Spring.StiffnessMediumLow
+                            ),
+                            label = "rail_icon_scale"
+                        )
                         NavigationRailItem(
                             selected = isSelected,
                             onClick = { currentTab = tab },
                             icon = {
                                 Icon(
                                     imageVector = if (isSelected) tab.selectedIcon else tab.unselectedIcon,
-                                    contentDescription = tab.title
+                                    contentDescription = tab.title,
+                                    modifier = Modifier.scale(iconScale)
                                 )
                             },
                             label = { Text(tab.title) },
@@ -297,7 +317,9 @@ fun MainScreen(
                     Spacer(modifier = Modifier.weight(1f))
                     IconButton(
                         onClick = { showSettingsSheet = true },
-                        modifier = Modifier.testTag("settings_button")
+                        modifier = Modifier
+                            .bounceClick(scaleDown = 0.88f, tiltDegrees = 20f)
+                            .testTag("settings_button")
                     ) {
                         Icon(
                             imageVector = Icons.Outlined.Settings,
@@ -362,16 +384,30 @@ fun MainScreen(
                     ) {
                         ScreenTab.entries.forEach { tab ->
                             val isSelected = (currentTab == tab)
+                            val iconScale by animateFloatAsState(
+                                targetValue = if (isSelected) 1.18f else 1f,
+                                animationSpec = spring(
+                                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                                    stiffness = Spring.StiffnessMediumLow
+                                ),
+                                label = "bottom_nav_icon_scale"
+                            )
                             NavigationBarItem(
                                 selected = isSelected,
                                 onClick = { currentTab = tab },
                                 icon = {
                                     Icon(
                                         imageVector = if (isSelected) tab.selectedIcon else tab.unselectedIcon,
-                                        contentDescription = tab.title
+                                        contentDescription = tab.title,
+                                        modifier = Modifier.scale(iconScale)
                                     )
                                 },
-                                label = { Text(tab.title) },
+                                label = {
+                                    Text(
+                                        text = tab.title,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                    )
+                                },
                                 colors = NavigationBarItemDefaults.colors(
                                     selectedIconColor = palette.primary,
                                     selectedTextColor = palette.primary,
@@ -463,7 +499,7 @@ fun TopHeaderBar(
                 color = palette.cellGivenText
             )
 
-            // Live streak badge: shows streak for solving ANY puzzle!
+            // Live streak badge with rolling number
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(12.dp))
@@ -471,15 +507,16 @@ fun TopHeaderBar(
                     .padding(horizontal = 8.dp, vertical = 3.dp)
                     .testTag("header_streak_badge")
             ) {
-                Text(
-                    text = "🔥 $streak",
+                AnimatedRollingNumber(
+                    value = streak,
+                    prefix = "🔥 ",
+                    color = palette.secondary,
                     fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = palette.secondary
+                    fontWeight = FontWeight.Bold
                 )
             }
 
-            // Live Rating Score badge
+            // Live Rating Score badge with rolling number
             if (totalScore > 0) {
                 Box(
                     modifier = Modifier
@@ -488,21 +525,23 @@ fun TopHeaderBar(
                         .padding(horizontal = 8.dp, vertical = 3.dp)
                         .testTag("header_score_badge")
                 ) {
-                    Text(
-                        text = "⭐ $totalScore",
+                    AnimatedRollingNumber(
+                        value = totalScore,
+                        prefix = "⭐ ",
+                        color = WarmAmber,
                         fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = WarmAmber
+                        fontWeight = FontWeight.Bold
                     )
                 }
             }
         }
 
-        // Secluded Settings in top corner
+        // Secluded Settings in top corner with bounce & spin micro-interaction
         IconButton(
             onClick = onOpenSettings,
             modifier = Modifier
                 .size(40.dp)
+                .bounceClick(scaleDown = 0.88f, tiltDegrees = 22f)
                 .clip(RoundedCornerShape(10.dp))
                 .background(palette.card)
                 .testTag("settings_button")
@@ -533,32 +572,51 @@ fun TabContent(
     onNavigateToStickers: () -> Unit,
     onStartMatch: (Difficulty) -> Unit
 ) {
-    when (tab) {
-        ScreenTab.HOME -> HomeScreen(
-            sudokuViewModel = sudokuViewModel,
-            socialViewModel = socialViewModel,
-            onStartMatch = onStartMatch,
-            onNavigateToRank = onNavigateToRank,
-            onNavigateToDashboard = onNavigateToDashboard,
-            onNavigateToDaily = onNavigateToDaily,
-            onNavigateToStickers = onNavigateToStickers
-        )
-        ScreenTab.PLAY -> PlayScreen(
-            viewModel = sudokuViewModel,
-            onGoHome = onNavigateToHome
-        )
-        ScreenTab.DASHBOARD -> DashboardScreen(
-            viewModel = dashboardViewModel,
-            onNavigateToPlay = onNavigateToPlay
-        )
-        ScreenTab.LEADERBOARD -> LeaderboardScreen(viewModel = socialViewModel)
-        ScreenTab.DAILY -> DailyScreen(
-            viewModel = dailyViewModel,
-            onStartDailyGame = {
-                sudokuViewModel.startNewGame(Difficulty.DAILY, isDaily = true)
-                onNavigateToPlay()
-            }
-        )
+    AnimatedContent(
+        targetState = tab,
+        transitionSpec = {
+            val forward = targetState.ordinal >= initialState.ordinal
+            val slideIn = slideInHorizontally(
+                animationSpec = spring(
+                    dampingRatio = 0.82f,
+                    stiffness = Spring.StiffnessMediumLow
+                )
+            ) { fullWidth -> if (forward) fullWidth / 4 else -fullWidth / 4 }
+            val slideOut = slideOutHorizontally(
+                animationSpec = tween(180)
+            ) { fullWidth -> if (forward) -fullWidth / 5 else fullWidth / 5 }
+
+            (slideIn + fadeIn(tween(200)) + scaleIn(initialScale = 0.96f, animationSpec = tween(200))) togetherWith
+                (slideOut + fadeOut(tween(150))) using SizeTransform(clip = false)
+        },
+        label = "screen_tab_transition"
+    ) { targetTab ->
+        when (targetTab) {
+            ScreenTab.HOME -> HomeScreen(
+                sudokuViewModel = sudokuViewModel,
+                socialViewModel = socialViewModel,
+                onStartMatch = onStartMatch,
+                onNavigateToRank = onNavigateToRank,
+                onNavigateToDashboard = onNavigateToDashboard,
+                onNavigateToDaily = onNavigateToDaily,
+                onNavigateToStickers = onNavigateToStickers
+            )
+            ScreenTab.PLAY -> PlayScreen(
+                viewModel = sudokuViewModel,
+                onGoHome = onNavigateToHome
+            )
+            ScreenTab.DASHBOARD -> DashboardScreen(
+                viewModel = dashboardViewModel,
+                onNavigateToPlay = onNavigateToPlay
+            )
+            ScreenTab.LEADERBOARD -> LeaderboardScreen(viewModel = socialViewModel)
+            ScreenTab.DAILY -> DailyScreen(
+                viewModel = dailyViewModel,
+                onStartDailyGame = {
+                    sudokuViewModel.startNewGame(Difficulty.DAILY, isDaily = true)
+                    onNavigateToPlay()
+                }
+            )
+        }
     }
 }
-

@@ -1,5 +1,7 @@
 package com.example.ui.components
 
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -7,7 +9,6 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -31,9 +32,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.ui.theme.ObsidianBorder
-import com.example.ui.theme.ObsidianSecondary
-import com.example.ui.theme.ObsidianSurfaceElevated
+import com.example.ui.theme.LocalThemePalette
 import com.example.ui.theme.ObsidianWarning
 
 @Composable
@@ -43,6 +42,7 @@ fun PersistentTimerComponent(
     onTogglePause: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val palette = LocalThemePalette.current
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
     val alpha by infiniteTransition.animateFloat(
         initialValue = 0.3f,
@@ -54,49 +54,51 @@ fun PersistentTimerComponent(
         label = "pulseAlpha"
     )
 
+    val accent by animateColorAsState(
+        targetValue = if (isPaused) ObsidianWarning else palette.secondary,
+        animationSpec = tween(220),
+        label = "timerAccent"
+    )
     val formattedTime = formatTimer(seconds)
 
     Row(
         modifier = modifier
+            .bounceClick(pressedScale = 0.95f, onClick = onTogglePause)
             .clip(RoundedCornerShape(20.dp))
-            .background(ObsidianSurfaceElevated)
-            .border(1.dp, ObsidianBorder, RoundedCornerShape(20.dp))
-            .clickable { onTogglePause() }
-            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .background(palette.surfaceElevated)
+            .border(1.dp, palette.border, RoundedCornerShape(20.dp))
+            .padding(horizontal = 14.dp, vertical = 8.dp)
             .testTag("timer_component"),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        // Status indicator dot
+        // Status indicator dot (breathes while the clock runs)
         Box(
             modifier = Modifier
                 .size(8.dp)
                 .clip(CircleShape)
-                .background(
-                    if (isPaused) ObsidianWarning
-                    else ObsidianSecondary.copy(alpha = alpha)
-                )
+                .background(if (isPaused) accent else accent.copy(alpha = alpha))
         )
 
-        // Time text
         Text(
             text = formattedTime,
             color = Color.White,
-            fontSize = 15.sp,
+            fontSize = 16.sp,
             fontWeight = FontWeight.SemiBold,
             fontFamily = FontFamily.Monospace,
             modifier = Modifier.testTag("timer_display")
         )
 
-        // Pause/Play Icon
-        Icon(
-            imageVector = if (isPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
-            contentDescription = if (isPaused) "Resume game" else "Pause game",
-            tint = if (isPaused) ObsidianWarning else ObsidianSecondary,
-            modifier = Modifier
-                .size(18.dp)
-                .testTag("timer_pause_toggle")
-        )
+        Crossfade(targetState = isPaused, animationSpec = tween(180), label = "timerIcon") { paused ->
+            Icon(
+                imageVector = if (paused) Icons.Default.PlayArrow else Icons.Default.Pause,
+                contentDescription = if (paused) "Resume game" else "Pause game",
+                tint = accent,
+                modifier = Modifier
+                    .size(18.dp)
+                    .testTag("timer_pause_toggle")
+            )
+        }
     }
 }
 
